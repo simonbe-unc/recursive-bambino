@@ -1,0 +1,523 @@
+\documentclass{sigkddExp}
+\usepackage{graphicx} % need this package
+
+\begin{document}
+
+\title{A Machine Learning Approach to the Baseball Hall of Fame}
+
+\numberofauthors{4}
+
+\author{
+Simon Bertron 
+\quad Mitchell Brady 
+\quad John Rendleman 
+\quad Taylor Smith
+}
+
+\date{7 May 2019}
+\maketitle
+\begin{abstract}
+This paper argues for a 
+\end{abstract}
+
+\section{Introduction}
+Since 1936, the \textbf{Baseball Hall of Fame}, located in Cooperstown, New York, has sought to enshrine the players, managers, executives, umpires, and others who have contributed to the fabric of the history of baseball. As of 2019, 328 men and one woman have been inducted to the Hall. Players are inducted into the Hall via election by the Baseball Writers' Association of America (BBWAA) or the Veterans' Committee. Five years after his retirement, any player with at least 10 years of major league experience who passes a screening committee are eligible to be voted in by BBWAA members with more than 10 years' membership who have covered Major League Baseball (MLB) in the 10 years preceding the election. Each voter may name up to 10 candidates; any player who appears on greater than 75\% of ballots is elected. Any player who appears on less than 5\% of ballots is removed from future ballots but can be considered by the Veterans Committee. Players receiving between 5\% and 75\% of the votes can be reconsidered annually for a maximum of ten years. It falls upon the Veterans Committee to elect all other candidates, including long-retired players, non-playing personnel, and players who are not inducted by the BBWAA after 10 years of eligibility.
+
+The complexity and elitist nature of this process leads to often endless debate among fans of the game over who is truly worthy of induction into the Hall of Fame. The traditionalist nature of baseball (see appeals to ``Unwritten Rules") and its scandals (see the Black Sox Scandal, Pete Rose, steroids, the BALCO Scandal, etc.) further complicate selection criteria. It is the purpose of this paper to investigate a machine learning, probabilistic approach that can reveal past biases as well as provide a more objective basis for induction. 
+
+\section{Data Collection}
+We collected data from the widely-used and cited Sean Lahman baseball database, which includes data on players from the years 1871-2018. This includes many common statistics like games, hits, runs batted in, pitching wins, and more. It also includes historical Hall of Fame voting data. However, it does not include advanced statistics like Wins Above Replacement (WAR), weighted on-base average (wOBA), fielding independent pitching (FIP), and more. For some of these advanced stats, we downloaded data from FanGraphs, a site which collects statistics on every player in MLB history, has its own calculations for WAR (often cited as fWAR in the literature), and calculates other advanced stats. 
+
+Using these data sources, we aggregated data on all players who are in the Hall of Fame currently (for whom we had statistics) or had at least 10 years of service time (calculated as length between debut and final game). We also threw out players who are currently playing or those who have retired during the last five years. Though these players may be great, they may bias our learning as they cannot be eligible for the Hall.\footnote{Note that data was still collected on these players to use for prediction via our logistic regression and neural network models.} We focused on position players; pitchers are a source of consideration for future work. After taking special care to remove pitchers from the data set, we had full sets of data for $2,983$ players (only $151$ of whom are Hall of Famers) to use in our models. After adding a binary variable for whether a player had been implicated in a major scandal\footnote{These players were: Shoeless Joe Jackson, Pete Rose, Barry Bonds, Mark McGwire, Sammy Sosa, Manny Ramirez, Roger Clemens, Rafael Palmeiro, Gary Sheffield, and Alex Rodriguez.} and converting batting and fielding hands into binary variables, we ended up with 86 features.\footnote{A full list of these features can be found in the Appendix.}
+
+\subsection{Shortcomings of Data}
+While we have the benefit of FanGraphs' extensive data set, we were unable to obtain certain advanced stats like FIP and others. Future work should be done to incorporate these as well as other stats that we may have overlooked.
+
+Further, the years 1904 and 1994 are both omitted from our data set due to conflicts occurring in each respective year. In 1904, New York Giants manager John McGraw refused to allow his team to partake in the World Series versus the Boston Americans, a team from the newer, less legitimate American League. In 1994, the entire Major League season was canceled due to player strikes. The lack of this data could slightly skew results but not too much due to the vast amounts of other data.
+
+\section{Feature Selection}
+As a first step for examining our data before we constructed a logistic regression classifier, we used \textbf{scikit-learn}'s \textbf{SelectKBest} module for univariate feature selection to examine which 10 features were most correlated with selection to the Baseball Hall of Fame. For our first test, we used \textbf{Mutual Information}\footnote{For this, we used scikit-learn's \textbf{mutual\textunderscore info\textunderscore classif} module.} for a discrete target variable (since our target is a binary classification).\textbf{Provide a citation to mutual information?} This produced 10 features with the distribution according to \textbf{Figure 1}.\footnote{These features are: career games played, career at bats, career runs scored, career hits, career doubles, career runs batted in, career walks, Offensive Runs Above Average (Off), WAR, and games fielding.} We also used the ANOVA f-value using scikit-learn's \textbf{f\textunderscore classif} module to provide an alternate view of the features. The only difference between these two mechanisms was the exclusion of games fielding to the favor of career triples.\footnote{Note that we could not use the $\chi^2$ stats because our data set included some negative features, including WAR and Off.}
+
+\begin{figure}[htbp]
+\includegraphics[width=1\linewidth]{mutualinfohistogram.png} 
+\caption{Distribution of 10 highest scoring features according to mutual information among Hall of Famers (Blue) and all players (Red).}
+\end{figure} 
+
+\section{Logistic Regression Model}
+We used scikit-learn's \textbf{LogisticRegressionCV} module to construct a logistic regression model for predicting which players will make the hall of fame. This module solves a L2 penalized logistic regression, which minimizes the following cost function: $$ \min_{\beta_0,\beta} \sum_i y_i(\beta_0+x_i^T\beta)-\log(1+\exp{(\beta_0+x_i^T\beta)}) - \frac{\lambda}{2}\beta^T\beta $$
+We used 5-fold cross-validation to further train the model. 
+
+\subsection{Model Results: Confusion Matrix}
+Our resulting model correctly predicted all of the Hall of Famers. However, it did produce 64 false positives\footnote{These false positives range from Barry Bonds and Pete Rose to Bob Johnson and Sid Gordon. See the Appendix for the full list of false positives.}, which seems like a large number compared to the number of Hall of Famers but in the context of the size of the data set is not as bad. All of these results lead to the confusion matrices in \textbf{Figure 2}.
+
+\begin{figure}[htbp]
+\begin{minipage}{.5\linewidth}
+\includegraphics[width=1\linewidth]{confusionmatrix.png} 
+\end{minipage}%
+\begin{minipage}{.5\linewidth}
+\includegraphics[width=1\linewidth]{confusionmatrixnon.png} 
+\end{minipage}%
+\caption{Normalized and non-normalized confusion matrices for L2 penalized logistic regression model.}
+\end{figure}
+
+\subsection{Model Results: Scoring}
+We then explored various scoring metrics for the classification model. See \textbf{Table 1} for the results.
+
+\begin{table}
+\caption{Classification Metrics for L2 penalized logistic regression model}
+\begin{tabular}{|c|c|l|} \hline
+Metric&Score\\ \hline
+Average Precision Score&$0.9262$\\ \hline
+Accuracy Score&$0.9779$\\ \hline
+Balanced Accuracy Score&$0.9883$\\ \hline
+Hinge Loss&$0.9699$\\ \hline
+Matthews Correlation Coefficient&$0.8282$\\ \hline
+ROC AUC&$0.9960$\\ \hline
+F1 Score&$0.8251$\\ \hline
+Hamming Loss&$0.0221$\\ \hline
+Jaccard Similarity Coefficient Score&$0.9779$\\ \hline
+Cross-Entropy Loss&$0.7640$\\ \hline
+Zero-One Loss&$0.0221$\\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Soon-To-Be Hall of Famers}
+The logistic regression model anointed 12 players that have either recently retired or are currently playing to be tapped for the Hall of Fame. These players are summarized in \textbf{Table 2} together with the probability according to the model that they will make the Hall of Fame. 
+
+These names mostly make sense. The only players that are currently playing are Albert Pujols, Brian McCann, Yadier Molina, Buster Posey, and Mike Trout (though Ichiro, Adrian Beltre, and Joe Mauer concluded their careers within the last year). Pujols, McCann, Molina, and Posey are at the tail-end of illustrious careers, and so it is that much more remarkable that the 27 year-old Mike Trout is already tipped to make the Hall of Fame should he retire today. The high probability that Alex Rodriguez (A-Rod) makes the Hall is perhaps debatable due to his admission of performance enhancing drug use. The other names include hit merchant Ichiro (one of only 30 players ever to get $3,000$ hits) and Derek Jeter, who also had $3,000$ hits and was a key contributor to the 1990s success of the New York Yankees.
+
+\begin{table}
+\caption{Future Hall of Famers according to the logistic regression model}
+\begin{tabular} {|c|c|l|} \hline
+Name&Probability\\ \hline
+Adrian Beltre&0.999906\\ \hline 
+Carlos Beltran&0.998823\\ \hline
+Jason Giambi&0.889027\\ \hline
+Derek Jeter&1.000000\\ \hline
+Joe Mauer&0.996124\\ \hline
+Brian McCann&0.964518\\ \hline
+Yadier Molina&0.763639\\ \hline
+Buster Posey&0.996227\\ \hline
+Albert Pujols&0.980307\\ \hline
+Alex Rodriguez&1.000000\\ \hline
+Ichiro Suzuki&1.000000\\ \hline
+Mike Trout&0.999999\\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+With this model, it seems that there is a trade-off between the number of false positives and false negatives. The model correctly identifies all the Hall of Famers at the cost of producing 64 false positives.
+
+Among these false positives are Barry Bonds and Pete Rose, who would be surefire picks for the Hall if not for their respective scandals.\footnote{It has long been alleged that Bonds' use of PEDs led to his late-career burst to breaking the career home runs record. Pete Rose, MLB's all-time leader in hits, was banned from baseball after betting on games while he was employed as a player and manager of the Cincinnati Reds.} Another advantage of this model is that it identifies Seattle Mariners slugger Edgar Martinez as a Hall of Fame pick; Martinez was selected for the Hall in this 10th and last year of eligibility in 2019. Given that there are so many players even in our reduced data set, it was likely that there were going to be some false positives, especially given the challenge of the induction process.
+
+\textbf{Discuss classification metrics?}
+
+\section{Clustering}
+
+\section{Neural Network}
+We used scikit-learn's \textbf{MLPClassifier} module, which implements a Multi-Layer Perceptron classifier and optimizes the log loss, together with the \textbf{GridSearchCV} module to search different parameters to train the best model. We explored logistic, ReLU, and hyperbolic tangent activation functions for our neurons, different numbers of hidden layers with number of neurons equal to the number of features, and different values of $\alpha$, from $10^{-5}$ to $10^2$, using 5-fold cross validation. Note that under the hood there is a final output layer with a logistic activation function as our output is a binary variable.
+
+The best model trained had 3 hidden layers, an alpha of $10^{-1}$, and logistic activation functions.
+
+\subsection{Model Results: Confusion Matrix}
+Our model correctly predicted all but 10 of the Hall of Famers.\footnote{These false negatives are Earl Averill, Larry Doby, Rick Ferrell, Chick Hafey, Billy Hamilton, Monte Irvin, George Kell, Ray Schalk, Deacon White, and Ross Youngs.} Despite this lower accuracy, it only had 4 false positives.\footnote{These false positives are Lave Cross, Bill Dahlen, Stan Hack, and Bob Johnson.} All these results lead to the confusion matrices in \textbf{Figure 3}.
+
+\begin{figure}[htbp]
+\begin{minipage}{.5\linewidth}
+\includegraphics[width=1\linewidth]{confusionmatrixnn.png} 
+\end{minipage}%
+\begin{minipage}{.5\linewidth}
+\includegraphics[width=1\linewidth]{confusionmatrixnonnn.png} 
+\end{minipage}%
+\caption{Normalized and non-normalized confusion matrices for L2 penalized logistic regression model.}
+\end{figure}
+
+\subsection{Model Results: Scoring}
+We then explored various scoring metrics for the neural network model. See \textbf{Table 3} for the results along with the change from the logistic regression model.
+
+\begin{table}
+\caption{Classification Metrics for neural network model.}
+\begin{tabular}{|p{3cm}|l|p{3cm}|} \hline
+Metric&Score&Change from Logistic Regression\\ \hline
+Average Precision Score&$0.9262$&$\rightarrow$\\ \hline
+Accuracy Score&$0.9952$&$\uparrow$\\ \hline
+Balanced Accuracy Score&$0.9661$&$\downarrow$\\ \hline
+Hinge Loss&$0.9526$&$\downarrow$\\ \hline
+Matthews Correlation Coefficient&$0.9503$&$\uparrow$\\ \hline
+ROC AUC&$0.9960$&$\uparrow$\\ \hline
+F1 Score&$0.9527$&$\uparrow$\\ \hline
+Hamming Loss&$0.0048$&$\uparrow$\\ \hline
+Jaccard Similarity Coefficient Score&$0.9951$&$\uparrow$\\ \hline
+Cross-Entropy Loss&$0.1671$&$\uparrow$\\ \hline
+Zero-One Loss&$0.0048$&$\uparrow$\\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Soon-To-Be Hall of Famers}
+The neural network predicted that ten recently retired or currently playing players would eventually be voted into the Hall of Fame. Interestingly, this list is slightly different from the logistic regression list, with former Triple Crown winner Miguel Cabrera and former MVP and speed-power superstar Jimmy Rollins making the Hall to the exclusion of Jason Giambi, Joe Mauer, Brian McCann, and Yadier Molina. Some of the probabilities are changed in this model as well. For example, Derek Jeter has gone from a surefire Hall of Famer to a borderline candidate. Further, that A-Rod continues to make the Hall is a mystery, as the neural network model excluded false positives with scandals like Pete Rose and Barry Bonds. Further, Mike Trout continues to show his status as a generational talent.
+
+\begin{table}
+\caption{Future Hall of Famers according to the neural network model}
+\begin{tabular} {|c|c|l|} \hline
+Name&Probability\\ \hline
+Adrian Beltre&0.760070\\ \hline
+Carlos Beltran&0.625780\\ \hline
+Miguel Cabrera&0.836224\\ \hline
+Derek Jeter&0.557306\\ \hline
+Buster Posey&0.796558\\ \hline
+Albert Pujols&0.990240\\ \hline
+Alex Rodriguez&0.966291\\ \hline
+Jimmy Rollins&0.886612\\ \hline
+Ichiro Suzuki&0.987758\\ \hline
+Mike Trout&0.770739\\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+The neural network model seemed to be much more sensitive to changes in the parameters than the logistic regression model. Frustratingly, several test runs of the neural network resulted in every player being mapped to a 0. Eventually, after iterating on different choices of $\alpha$s, hidden layer sizes, and activation functions, we believe that we settled on choices that led to a better model.
+
+While the model is not as good at identifying actual Hall of Famers, it has much less false positives compared to the logistic regression model. We believe that this is a fair trade-off in accuracy. All of the model's false negatives made the Hall on the basis of their play in the early years of MLB, all playing before 1950 and being inducted before 1970. Larry Doby deserves special mention as the second man to break baseball's color barrier after Jackie Robinson. By omitting these men, who were unable to accumulate the stats of later Hall of Famers, the model is better able to fit other players. Interestingly, however, the four false positives also dominated the early years of baseball. Perhaps this leads to the conclusion that future work should be done considering only baseball's modern era for predicting future Hall of Fame members, as these statistics would be much more suited to the modern game.
+
+\section{Conclusion and Discussion}
+
+\section{The Body of The Paper}
+Typically, the body of a paper is organized
+into a hierarchical structure, with numbered or unnumbered
+headings for sections, subsections, sub-subsections, and even
+smaller sections.  The command \texttt{{\char'134}section} that
+precedes this paragraph is part of such a
+hierarchy.\footnote{This is the second footnote.  It
+starts a series of three footnotes that add nothing
+informational, but just give an idea of how footnotes work
+and look. It is a wordy one, just so you see
+how a longish one plays out.} \LaTeX\ handles the numbering
+and placement of these headings for you, when you use
+the appropriate heading commands around the titles
+of the headings.  If you want a sub-subsection or
+smaller part to be unnumbered in your output, simply append an
+asterisk to the command name.  Examples of both
+numbered and unnumbered headings will appear throughout the
+balance of this sample document.
+
+Because the entire article is contained in
+the \textbf{document} environment, you can indicate the
+start of a new paragraph with a blank line in your
+input file; that is why this sentence forms a separate paragraph.
+
+\subsection{Type Changes and Special Characters}
+We have already seen several typeface changes in this sample.  You
+can indicate italicized words or phrases in your text with
+the command \texttt{{\char'134}textit}; emboldening with the
+command \texttt{{\char'134}textbf}
+and typewriter-style (for instance, for computer code) with
+\texttt{{\char'134}texttt}.  But remember, you do not
+have to indicate typestyle changes when such changes are
+part of the \textit{structural} elements of your
+article; for instance, the heading of this subsection will
+be in a sans serif\footnote{A third footnote, here.
+Let's make this a rather short one to
+see how it looks.} typeface, but that is handled by the
+document class file. Take care with the use
+of\footnote{A fourth, and last, footnote.}
+the curly braces in typeface changes; they mark
+the beginning and end of
+the text that is to be in the different typeface.
+
+You can use whatever symbols, accented characters, or
+non-English characters you need anywhere in your document;
+you can find a complete list of what is
+available in the \textit{\LaTeX\
+User's Guide}\cite{Lamport:LaTeX}.
+
+\subsection{Math Equations}
+You may want to display math equations in three distinct styles:
+inline, numbered or non-numbered display.  Each of
+the three are discussed in the next sections.
+
+\subsubsection{Inline (In-text) Equations}
+A formula that appears in the running text is called an
+inline or in-text formula.  It is produced by the
+\textbf{math} environment, which can be
+invoked with the usual \texttt{{\char'134}begin. . .{\char'134}end}
+construction or with the short form \texttt{\$. . .\$}. You
+can use any of the symbols and structures,
+from $\alpha$ to $\omega$, available in
+\LaTeX\cite{Lamport:LaTeX}; this section will simply show a
+few examples of in-text equations in context. Notice how
+this equation: \begin{math}\lim_{n\rightarrow \infty}x=0\end{math},
+set here in in-line math style, looks slightly different when
+set in display style.  (See next section).
+
+\subsubsection{Display Equations}
+A numbered display equation -- one set off by vertical space
+from the text and centered horizontally -- is produced
+by the \textbf{equation} environment. An unnumbered display
+equation is produced by the \textbf{displaymath} environment.
+
+Again, in either environment, you can use any of the symbols
+and structures available in \LaTeX; this section will just
+give a couple of examples of display equations in context.
+First, consider the equation, shown as an inline equation above:
+\begin{equation}\lim_{n\rightarrow \infty}x=0\end{equation}
+Notice how it is formatted somewhat differently in
+the \textbf{displaymath}
+environment.  Now, we'll enter an unnumbered equation:
+\begin{displaymath}\sum_{i=0}^{\infty} x + 1\end{displaymath}
+and follow it with another numbered equation:
+\begin{equation}\sum_{i=0}^{\infty}x_i=\int_{0}^{\pi+2} f\end{equation}
+just to demonstrate \LaTeX's able handling of numbering.
+
+\subsection{Citations}
+Citations to articles \cite{bowman:reasoning, clark:pct, braams:babel, herlihy:methodology},
+conference
+proceedings \cite{clark:pct} or books \cite{salas:calculus, Lamport:LaTeX} listed
+in the Bibliography section of your
+article will occur throughout the text of your article.
+You should use BibTeX to automatically produce this bibliography;
+you simply need to insert one of several citation commands with
+a key of the item cited in the proper location in
+the \texttt{.tex} file \cite{Lamport:LaTeX}.
+The key is a short reference you invent to uniquely
+identify each work; in this sample document, the key is
+the first author's surname and a
+word from the title.  This identifying key is included
+with each item in the \texttt{.bib} file for your article.
+
+The details of the construction of the \texttt{.bib} file
+are beyond the scope of this sample document, but more
+information can be found in the \textit{Author's Guide},
+and exhaustive details in the \textit{\LaTeX\ User's
+Guide}\cite{Lamport:LaTeX}.
+
+So far, this article has shown only the plainest form
+of the citation command, using \texttt{{\char'134}cite}.
+%
+%You can also use a citation as a noun in a sentence, as
+% is done here, and in the \citeN{herlihy:methodology} article;
+% use \texttt{{\char'134}citeN} in this case.  You can
+% even say, ``As was shown in \citeyearNP{bowman:reasoning}. . .''
+% or ``. . . which agrees with \citeANP{braams:babel}...'',
+% where the text shows only the year or only the author
+% component of the citation; use \texttt{{\char'134}citeyearNP}
+% or \texttt{{\char'134}citeANP}, respectively,
+% for these.  Most of the various citation commands may
+% reference more than one work \cite{herlihy:methodology,bowman:reasoning}.
+% A complete list of all citation commands available is
+% given in the \textit{Author's Guide}.
+
+\subsection{Tables}
+Because tables cannot be split across pages, the best
+placement for them is typically the top of the page
+nearest their initial cite.  To
+ensure this proper ``floating'' placement of tables, use the
+environment \textbf{table} to enclose the table's contents and
+the table caption.  The contents of the table itself must go
+in the \textbf{tabular} environment, to
+be aligned properly in rows and columns, with the desired
+horizontal and vertical rules.  Again, detailed instructions
+on \textbf{tabular} material
+is found in the \textit{\LaTeX\ User's Guide}.
+
+Immediately following this sentence is the point at which
+Table 1 is included in the input file; compare the
+placement of the table here with the table in the printed
+dvi output of this document.
+
+\begin{table}
+\centering
+\caption{Frequency of Special Characters}
+\begin{tabular}{|c|c|l|} \hline
+Non-English or Math&Frequency&Comments\\ \hline
+\O & 1 in 1,000& For Swedish names\\ \hline
+$\pi$ & 1 in 5& Common in math\\ \hline
+\$ & 4 in 5 & Used in business\\ \hline
+$\Psi^2_1$ & 1 in 40,000& Unexplained usage\\
+\hline\end{tabular}
+\end{table}
+
+To set a wider table, which takes up the whole width of
+the page's live area, use the environment
+\textbf{table*} to enclose the table's contents and
+the table caption.  As with a single-column table, this wide
+table will "float" to a location deemed more desirable.
+Immediately following this sentence is the point at which
+Table 2 is included in the input file; again, it is
+instructive to compare the placement of the
+table here with the table in the printed dvi
+output of this document.
+
+
+\begin{table*}
+\centering
+\caption{Some Typical Commands}
+\begin{tabular}{|c|c|l|} \hline
+Command&A Number&Comments\\ \hline
+\texttt{{\char'134}alignauthor} & 100& Author alignment\\ \hline
+\texttt{{\char'134}numberofauthors}& 200& Author enumeration\\ \hline
+\texttt{{\char'134}table}& 300 & For tables\\ \hline
+\texttt{{\char'134}table*}& 400& For wider tables\\ \hline\end{tabular}
+\end{table*}
+% end the environment with {table*}, NOTE not {table}!
+
+\subsection{Theorem-like Constructs}
+Other common constructs that may occur in your article are
+the forms for logical constructs like theorems, axioms,
+corollaries and proofs.  There are
+two forms, one produced by the
+command \texttt{{\char'134}newtheorem} and the
+other by the command \texttt{{\char'134}newdef}; perhaps
+the clearest and easiest way to distinguish them is
+to compare the two in the output of this sample document:
+
+This uses the \textbf{theorem} environment, created by
+the \texttt{{\char'134}newtheorem} command:
+\newtheorem{theorem}{Theorem}
+\begin{theorem}
+Let $f$ be continuous on $[a,b]$.  If $G$ is
+an antiderivative for $f$ on $[a,b]$, then
+\begin{displaymath}\int^b_af(t)dt = G(b) - G(a).\end{displaymath}
+\end{theorem}
+
+The other uses the \textbf{definition} environment, created
+by the \texttt{{\char'134}newdef} command:
+\newdef{definition}{Definition}
+\begin{definition}
+If $z$ is irrational, then by $e^z$ we mean the
+unique number which has
+logarithm $z$: \begin{displaymath}{\log_e^z = z}\end{displaymath}
+\end{definition}
+
+Two lists of constructs that use one of these
+forms is given in the
+\textit{Author's  Guidelines}.
+ 
+There is one other similar construct environment, which is
+already set up
+for you; i.e. you must \textit{not} use
+a \texttt{{\char'134}newdef} command to
+create it: the \textbf{proof} environment.  Here
+is a example of its use:
+\begin{proof}
+Suppose on the contrary there exists a real number $L$ such that
+\begin{displaymath}
+\lim_{x\rightarrow\infty} \frac{f(x)}{g(x)} = L.
+\end{displaymath}
+Then
+\begin{displaymath}
+l=\lim_{x\rightarrow c} f(x)
+= \lim_{x\rightarrow c}
+\left[ g{x} \cdot \frac{f(x)}{g(x)} \right ]
+= \lim_{x\rightarrow c} g(x) \cdot \lim_{x\rightarrow c}
+\frac{f(x)}{g(x)} = 0\cdot L = 0,
+\end{displaymath}
+which contradicts our assumption that $l\neq 0$.
+\end{proof}
+
+Complete rules about using these environments and using the
+two different creation commands are in the
+\textit{Author's Guide}; please consult it for more
+detailed instructions.  If you need to use another construct,
+not listed therein, which you want to have the same
+formatting as the Theorem
+or the Definition\cite{salas:calculus} shown above,
+use the \texttt{{\char'134}newtheorem} or the
+\texttt{{\char'134}newdef} command,
+respectively, to create it.
+
+\subsection*{A Caveat for the \TeX\ Expert}
+Because you have just been given permission to
+use the \texttt{{\char'134}newdef} command to create a
+new form, you might think you can
+use \TeX's \texttt{{\char'134}def} to create a
+new command: \textit{Please refrain from doing this!}
+Remember that your \LaTeX\ source code is primarily intended
+to create camera-ready copy, but may be converted
+to other forms -- e.g. HTML. If you inadvertently omit
+some or all of the \texttt{{\char'134}def}s recompilation will
+be, to say the least, problematic.
+
+\section{Conclusions}
+This paragraph will end the body of this sample document.
+Remember that you might still have Acknowledgements or
+Appendices; brief samples of these
+follow.  There is still the Bibliography to deal with; and
+we will make a disclaimer about that here: with the exception
+of the reference to the \LaTeX\ book, the citations in
+this paper are to articles which have nothing to
+do with the present subject and are used as
+examples only.
+%\end{document}  % This is where a 'short' article might terminate
+
+%ACKNOWLEDGEMENTS are optional
+\section{Acknowledgements}
+This section is optional; it is a location for you
+to acknowledge grants, funding, editing assistance and
+what have you.  In the present case, for example, the
+authors would like to thank Gerald Murray of ACM for
+his help in codifying this \textit{Author's Guide}
+and the \textbf{.cls} and \textbf{.tex} files that it describes.
+
+%
+% The following two commands are all you need in the
+% initial runs of your .tex file to
+% produce the bibliography for the citations in your paper.
+\bibliographystyle{abbrv}
+\bibliography{sigproc}  % sigproc.bib is the name of the Bibliography in this case
+% You must have a proper ".bib" file
+%  and remember to run:
+% latex bibtex latex latex
+% to resolve all references
+%
+% ACM needs 'a single self-contained file'!
+%
+%APPENDICES are optional
+% SIGKDD: balancing columns messes up the footers: Sunita Sarawagi, Jan 2000.
+% \balancecolumns
+\appendix
+%Appendix A
+\section{Headings in Appendices}
+The rules about hierarchical headings discussed above for
+the body of the article are different in the appendices.
+In the \textbf{appendix} environment, the command
+\textbf{section} is used to
+indicate the start of each Appendix, with alphabetic order
+designation (i.e. the first is A, the second B, etc.) and
+a title (if you include one).  So, if you need
+hierarchical structure
+\textit{within} an Appendix, start with \textbf{subsection} as the
+highest level. Here is an outline of the body of this
+document in Appendix-appropriate form:
+\subsection{Introduction}
+\subsection{The Body of the Paper}
+\subsubsection{Type Changes and Special Characters}
+\subsubsection{Math Equations}
+\paragraph{Inline (In-text) Equations}
+\paragraph{Display Equations}
+\subsubsection{Citations}
+\subsubsection{Tables}
+\subsubsection{Figures}
+\subsubsection{Theorem-like Constructs}
+\subsubsection*{A Caveat for the \TeX\ Expert}
+\subsection{Conclusions}
+\subsection{Acknowledgements}
+\subsection{Additional Authors}
+This section is inserted by \LaTeX; you do not insert it.
+You just add the names and information in the
+\texttt{{\char'134}additionalauthors} command at the start
+of the document.
+\subsection{References}
+Generated by bibtex from your ~.bib file.  Run latex,
+then bibtex, then latex twice (to resolve references)
+to create the ~.bbl file.  Insert that ~.bbl file into
+the .tex source file and comment out
+the command \texttt{{\char'134}thebibliography}.
+% This next section command marks the start of
+% Appendix B, and does not continue the present hierarchy
+\section{More Help for the Hardy}
+The acmproc-sp document class file itself is chock-full of succinct
+and helpful comments.  If you consider yourself a moderately
+experienced to expert user of \LaTeX, you may find reading
+it useful but please remember not to change it.
+
+% That's all folks!
+\end{document}
